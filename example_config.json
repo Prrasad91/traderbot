@@ -1,0 +1,24 @@
+{
+    "whatsapp": {
+        "phone_number": "+911234567890",
+        "alert_cooldown_minutes": 5
+    },
+    "trading": {
+        "risk_per_trade": 0.01,  # 1% risk per trade
+        "min_risk_reward_ratio": 1.5,
+        "account_size": 100000
+    },
+    "analysis": {
+        "timeframes": ["5m", "15m", "1h"],
+        "indicators": {
+            "rsi_oversold": 30,
+            "rsi_overbought": 70,
+            "adx_threshold": 25
+        }
+    },
+    "alerts": {
+        "sound_enabled": true,
+        "whatsapp_enabled": true,
+        "save_charts": true
+    }
+}
