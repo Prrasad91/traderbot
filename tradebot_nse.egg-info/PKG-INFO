@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: tradebot-nse
+Version: 0.1
+License-File: LICENSE
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: tradingview-ta
+Requires-Dist: requests
+Requires-Dist: plotly
+Dynamic: license-file
+Dynamic: requires-dist

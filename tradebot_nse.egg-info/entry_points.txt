@@ -1,0 +1,2 @@
+[console_scripts]
+tradebot = src.main:main

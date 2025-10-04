@@ -1,185 +1,162 @@
+from datetime import datetime, time
+
 class TradePlanGenerator:
     def __init__(self):
-        self.max_trades_per_day = 2
-        self.stop_loss_percent = 0.5  # 0.5% of capital
-        self.square_off_time = "15:15"  # 3:15 PM
-        
+        self.risk_per_trade = 0.01  # 1% risk per trade
+        self.min_rr_ratio = 1.5     # Minimum risk-reward ratio
+    
     def generate_trade_plan(self, market_data, technical_data, institutional_data, option_data, global_data):
-        """Generate a comprehensive trade plan based on all available data"""
+        if market_data is None or len(market_data) == 0:
+            raise ValueError("No market data available")
         
-        # Analyze institutional bias
-        inst_bias = self._analyze_institutional_bias(institutional_data)
+        current_price = market_data['Close'].iloc[-1]
         
-        # Analyze option chain
-        option_bias = self._analyze_option_chain(option_data)
+        # Analyze all data points to determine market bias
+        market_bias = self._determine_market_bias(
+            technical_data,
+            institutional_data,
+            option_data,
+            global_data
+        )
         
-        # Analyze global cues
-        global_bias = self._analyze_global_cues(global_data)
+        # Generate trading setups
+        setups = self._generate_setups(
+            current_price,
+            technical_data,
+            market_bias
+        )
         
-        # Combine all analysis for final bias
-        overall_bias = self._determine_overall_bias(inst_bias, option_bias, global_bias)
+        # Define risk management rules
+        risk_management = {
+            'max_trades': 2,
+            'stop_loss_percent': 0.5,  # 0.5% per trade
+            'square_off_time': '15:15'  # 3:15 PM
+        }
         
-        # Generate trade setups
-        primary_setup = self._generate_primary_setup(overall_bias, market_data, technical_data)
-        alternate_setup = self._generate_alternate_setup(overall_bias, market_data, technical_data)
+        # Create confirmation checklist
+        confirmation_checklist = [
+            "Price aligned with primary trend",
+            "Volume confirming price action",
+            "RSI showing momentum in trade direction",
+            "No major news events expected",
+            "Risk-reward ratio > 1.5",
+            "Position size within risk limits"
+        ]
         
         return {
-            "market_bias": {
-                "institutional": inst_bias,
-                "options": option_bias,
-                "global": global_bias,
-                "overall": overall_bias
-            },
-            "setups": {
-                "primary": primary_setup,
-                "alternate": alternate_setup
-            },
-            "risk_management": {
-                "max_trades": self.max_trades_per_day,
-                "stop_loss_percent": self.stop_loss_percent,
-                "square_off_time": self.square_off_time
-            },
-            "confirmation_checklist": self._generate_confirmation_checklist()
+            'market_bias': market_bias,
+            'setups': setups,
+            'risk_management': risk_management,
+            'confirmation_checklist': confirmation_checklist
         }
     
-    def _analyze_institutional_bias(self, institutional_data):
-        """Analyze FII/DII data to determine institutional bias"""
-        if not institutional_data:
-            return "neutral"
-            
-        fii = institutional_data.get('FII', {})
-        dii = institutional_data.get('DII', {})
+    def _determine_market_bias(self, technical_data, institutional_data, option_data, global_data):
+        bias = {
+            'primary': 'neutral',
+            'intraday': 'neutral',
+            'confidence': 'low'
+        }
         
-        # Simple logic - can be enhanced
-        fii_net = fii.get('cash_flow', 0) + fii.get('futures_oi', 0)
-        dii_net = dii.get('cash_flow', 0)
+        # Technical bias
+        if technical_data['trend']['trend'] != 'neutral':
+            bias['primary'] = technical_data['trend']['trend']
+            if technical_data['trend']['strength'] >= 3:
+                bias['confidence'] = 'high'
+            elif technical_data['trend']['strength'] >= 2:
+                bias['confidence'] = 'medium'
         
+        # Intraday bias based on multiple factors
+        intraday_score = 0
+        
+        # Technical factors
+        if technical_data['momentum']['momentum'] == bias['primary']:
+            intraday_score += 1
+        
+        # Institutional activity
+        fii_net = institutional_data['FII']['buy'] - institutional_data['FII']['sell']
+        dii_net = institutional_data['DII']['buy'] - institutional_data['DII']['sell']
         if fii_net > 0 and dii_net > 0:
-            return "strongly_bullish"
-        elif fii_net > 0:
-            return "moderately_bullish"
+            intraday_score += 1
+            if bias['primary'] == 'neutral':
+                bias['primary'] = 'bullish'
         elif fii_net < 0 and dii_net < 0:
-            return "strongly_bearish"
-        elif fii_net < 0:
-            return "moderately_bearish"
-        return "neutral"
-    
-    def _analyze_option_chain(self, option_data):
-        """Analyze option chain data for bias"""
-        if not option_data:
-            return "neutral"
-            
-        pcr = option_data.get('pcr', 0)
+            intraday_score -= 1
+            if bias['primary'] == 'neutral':
+                bias['primary'] = 'bearish'
         
-        if pcr > 1.5:
-            return "bullish"
-        elif pcr < 0.7:
-            return "bearish"
-        return "neutral"
-    
-    def _analyze_global_cues(self, global_data):
-        """Analyze global market cues"""
-        if not global_data:
-            return "neutral"
-            
-        positive_count = 0
-        negative_count = 0
+        # Options data
+        if option_data['PCR'] > 1:  # Put-Call Ratio
+            intraday_score += 1
+        elif option_data['PCR'] < 0.7:
+            intraday_score -= 1
         
-        for index_data in global_data.values():
-            if index_data.get('change_percent', 0) > 0:
-                positive_count += 1
-            else:
-                negative_count += 1
+        # Global markets influence
+        global_sentiment = sum([idx['change'] for idx in global_data.values()])
+        if global_sentiment > 0.5:
+            intraday_score += 1
+        elif global_sentiment < -0.5:
+            intraday_score -= 1
         
-        if positive_count > negative_count:
-            return "bullish"
-        elif negative_count > positive_count:
-            return "bearish"
-        return "neutral"
+        # Set intraday bias based on score
+        if intraday_score >= 2:
+            bias['intraday'] = 'bullish'
+        elif intraday_score <= -2:
+            bias['intraday'] = 'bearish'
+        
+        return bias
     
-    def _determine_overall_bias(self, inst_bias, option_bias, global_bias):
-        """Combine all biases to determine overall market bias"""
-        bias_map = {
-            "strongly_bullish": 2,
-            "moderately_bullish": 1,
-            "bullish": 1,
-            "neutral": 0,
-            "moderately_bearish": -1,
-            "bearish": -1,
-            "strongly_bearish": -2
+    def _generate_setups(self, current_price, technical_data, market_bias):
+        setups = {
+            'primary': None,
+            'alternate': None
         }
         
-        total_score = (bias_map.get(inst_bias, 0) * 2 +  # Give more weight to institutional bias
-                      bias_map.get(option_bias, 0) +
-                      bias_map.get(global_bias, 0))
-        
-        if total_score >= 2:
-            return "bullish"
-        elif total_score <= -2:
-            return "bearish"
-        return "neutral"
-    
-    def _generate_primary_setup(self, bias, market_data, technical_data):
-        """Generate primary trading setup based on bias"""
-        if market_data is None or technical_data is None:
-            return None
+        # Primary setup based on main trend
+        if market_bias['primary'] != 'neutral':
+            key_levels = technical_data['key_levels']
             
-        vwap = technical_data.get('vwap')
-        key_levels = technical_data.get('key_levels', {})
+            if market_bias['primary'] == 'bullish':
+                entry = key_levels['support_1']
+                stop_loss = key_levels['support_2']
+                target = current_price + (current_price - stop_loss) * self.min_rr_ratio
+                
+                setups['primary'] = {
+                    'type': 'long',
+                    'entry': entry,
+                    'stop_loss': stop_loss,
+                    'target': target,
+                    'confirmation': 'Break above recent high with volume'
+                }
+                
+                # Alternate bearish setup if primary is bullish
+                setups['alternate'] = {
+                    'type': 'short',
+                    'entry': key_levels['resistance_2'],
+                    'stop_loss': key_levels['resistance_2'] * 1.001,  # 0.1% above
+                    'target': current_price - (key_levels['resistance_2'] * 1.001 - current_price) * self.min_rr_ratio,
+                    'confirmation': 'Rejection at resistance with high volume'
+                }
+                
+            else:  # Bearish
+                entry = key_levels['resistance_1']
+                stop_loss = key_levels['resistance_2']
+                target = current_price - (stop_loss - current_price) * self.min_rr_ratio
+                
+                setups['primary'] = {
+                    'type': 'short',
+                    'entry': entry,
+                    'stop_loss': stop_loss,
+                    'target': target,
+                    'confirmation': 'Break below recent low with volume'
+                }
+                
+                # Alternate bullish setup if primary is bearish
+                setups['alternate'] = {
+                    'type': 'long',
+                    'entry': key_levels['support_2'],
+                    'stop_loss': key_levels['support_2'] * 0.999,  # 0.1% below
+                    'target': current_price + (current_price - key_levels['support_2'] * 0.999) * self.min_rr_ratio,
+                    'confirmation': 'Bounce from support with high volume'
+                }
         
-        if bias == "bullish":
-            return {
-                "type": "long",
-                "entry": f"Above {key_levels.get('prev_close')} with volume confirmation",
-                "stop_loss": key_levels.get('low'),
-                "target": key_levels.get('high'),
-                "confirmation": "Price above VWAP"
-            }
-        elif bias == "bearish":
-            return {
-                "type": "short",
-                "entry": f"Below {key_levels.get('prev_close')} with volume confirmation",
-                "stop_loss": key_levels.get('high'),
-                "target": key_levels.get('low'),
-                "confirmation": "Price below VWAP"
-            }
-        return None
-    
-    def _generate_alternate_setup(self, bias, market_data, technical_data):
-        """Generate alternate trading setup based on bias"""
-        if market_data is None or technical_data is None:
-            return None
-            
-        # Alternate setup is usually in the opposite direction of primary
-        key_levels = technical_data.get('key_levels', {})
-        
-        if bias == "bullish":
-            return {
-                "type": "short",
-                "entry": f"Below {key_levels.get('low')} with heavy selling pressure",
-                "stop_loss": key_levels.get('vwap'),
-                "target": f"{key_levels.get('low')} - 0.5%",
-                "confirmation": "Break of support with volume"
-            }
-        elif bias == "bearish":
-            return {
-                "type": "long",
-                "entry": f"Above {key_levels.get('high')} with heavy buying pressure",
-                "stop_loss": key_levels.get('vwap'),
-                "target": f"{key_levels.get('high')} + 0.5%",
-                "confirmation": "Break of resistance with volume"
-            }
-        return None
-    
-    def _generate_confirmation_checklist(self):
-        """Generate a checklist for trade confirmation"""
-        return [
-            "VWAP alignment with trade direction",
-            "Volume confirmation",
-            "Candlestick pattern confirmation",
-            "No contradicting institutional flow",
-            "Risk-reward ratio > 1:1",
-            "Not too close to day's high/low",
-            "Market breadth supporting the move",
-            "Time of day appropriate for trade"
-        ]
+        return setups

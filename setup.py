@@ -5,12 +5,15 @@ setup(
     version="0.1",
     packages=find_packages(),
     install_requires=[
-        "pandas",
-        "numpy",
-        "requests",
-        "beautifulsoup4",
-        "nsepython",
-        "plotly",
-        "python-dotenv"
-    ]
+        'pandas',
+        'numpy',
+        'tradingview-ta',
+        'requests',
+        'plotly',
+    ],
+    entry_points={
+        'console_scripts': [
+            'tradebot=src.main:main',
+        ],
+    },
 )
